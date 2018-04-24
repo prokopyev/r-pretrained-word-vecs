@@ -1,0 +1,13 @@
+"0","cat(""Parsing comments...\n"")"
+"1","Parsing comments...
+"
+"0","it <- df_orig %$%"
+"0","  str_to_lower(text) %>%"
+"0","  str_replace_all(""[^[:alpha:]]"", "" "") %>%"
+"0","  str_replace_all(""\\s+"", "" "") %>%"
+"0","  itoken(tokenizer = word_tokenizer)"
+"0","vectorizer <- create_vocabulary(it, ngram = c(1, 1), stopwords = stopwords(""en"")) %>%"
+"0","  prune_vocabulary(term_count_min = 3, doc_proportion_max = 0.5, vocab_term_max = 4000) %>%"
+"0","  vocab_vectorizer()"
+"2","Error in stopwords(""en"") : could not find function ""stopwords""
+"

@@ -1,0 +1,8 @@
+"0","cat(""Parsing comments...\n"")"
+"1","Parsing comments...
+"
+"0","it <- df_orig %$%"
+"0","  str_to_lower(text) %>%"
+"0","  str_replace_all(""[^[:alpha:]]"", "" "") %>%"
+"0","  str_replace_all(""\\s+"", "" "") %>%"
+"0","  itoken(tokenizer = word_tokenizer)"

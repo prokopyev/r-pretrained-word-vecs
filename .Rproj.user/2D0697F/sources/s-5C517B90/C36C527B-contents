@@ -1,0 +1,110 @@
+---
+title: "Using Pre-Trained Word Embeddings for Text Classification in R"
+author: "Anton Prokopyev"
+date: "April 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Setting Up in R
+
+First install and load necessary R packages and the dataset for out analysis. We’ll use a dataset of US politicians’ social media posts, labelled by Figure Eight (formerly CrowdFlower) (https://www.figure-eight.com/data-for-everyone/). We will focus on predicting the presence of partisan political bias in senators and representatives’ tweets and Facebook posts.
+
+```{r}
+library(tidyverse)
+library(rio)
+library(text2vec)
+library(tokenizers)
+
+df_orig <- import("assets/Political-media-DFE.csv")
+
+str(df_orig)
+```
+
+## Step 2: Data Preparation
+
+```{r}
+cat("Parsing comments...\n")
+
+it <- df_orig %$%
+  str_to_lower(text) %>%
+  str_replace_all("[^[:alpha:]]", " ") %>%
+  str_replace_all("\\s+", " ") %>%
+  itoken(tokenizer = tokenize_word_stems)
+
+vectorizer <- create_vocabulary(it, ngram = c(1, 1), stopwords = stopwords("en")) %>%
+              prune_vocabulary(term_count_min = 3, 
+              doc_proportion_max = 0.5, 
+              vocab_term_max = 4000) %>%
+              vocab_vectorizer()
+
+m_tfidf <- TfIdf$new(norm = "l2", sublinear_tf = T)
+tfidf <- create_dtm(it, vectorizer) %>%
+         fit_transform(m_tfidf)  
+```
+
+```{r}
+library(text2vec)
+# we are interested in words which are in word embeddings
+voc = create_vocabulary(rownames(vecs))
+# now we will create document-term matrix
+vectorizer = vocab_vectorizer(voc)
+dtm = itoken(d, tokenizer = word_tokenizer) %>% 
+  create_dtm(vectorizer)
+
+# normalize - calculate term frequaency - i.e. divide count of each word 
+# in document by total number of words in document. 
+# So at the end we will receive average of word vectors (not sum of word vectors!)
+dtm = normalize(dtm)
+# and now we can calculate vectors for document (average of vecors of words)
+# using dot product of dtm and embeddings matrix
+document_vecs = dtm %*% vecs
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

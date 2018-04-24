@@ -1,0 +1,37 @@
+install.packages(“Rtsne”)
+
+library(Rtsne)
+
+## Curating the database for analysis with both t-SNE and PCA
+Labels<-df_orig$bias
+train$label<-as.factor(df_orig$bias)
+
+## for plotting
+colors = rainbow(length(unique(train$label)))
+names(colors) = unique(train$label)
+
+## Executing the algorithm on curated data
+
+library(Rtsne)
+tsne <- Rtsne(unique(as.matrix(sentence_vectors)), 
+              verbose=TRUE, max_iter = 500, dims = 3,
+              check_duplicates = FALSE)
+# Run TSNE
+plot(tsne$Y, col= as.factor(df_orig$bias))
+
+autoplot(tsne, color = as.factor(df_orig$bias))
+
+     
+     
+plot(tsne$)
+
+## Plotting
+plot(tsne$Y, t='n', main="tsne")
+text(tsne$Y, labels=train$label, col=colors[train$label])
+
+install.packages("ggfortify")
+library(ggfortify)
+
+autoplot(prcomp(sentence_vectors), 
+         data=as.data.frame(as.numeric(df_orig$bias)),
+         color = as.numeric(df_orig$bias))

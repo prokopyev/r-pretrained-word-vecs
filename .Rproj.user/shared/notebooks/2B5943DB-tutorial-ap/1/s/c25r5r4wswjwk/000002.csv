@@ -1,0 +1,2 @@
+"0","testpred <- predict(m_xgb, as.matrix(X_test))"
+"0","hist(testpred)"

@@ -1,0 +1,7 @@
+"0","df_orig <- import(""assets/Political-media-DFE.csv"")"
+"0","df_orig$text_clean <- df_orig$text %>%        "
+"0","  rm_url(pattern=pastex(""@rm_twitter_url"", ""@rm_url"")) %>% # removing URLs"
+"0","  str_replace_all(""[^[:alpha:]]"", "" "") %>% # removing all symbols"
+"0","  rm_non_words() %>% # removing non-words"
+"0","  str_replace_all(""\\s+"", "" "") %>% # fixing poorly spaced strings"
+"0","  str_to_lower() # bringing everything to lower case"

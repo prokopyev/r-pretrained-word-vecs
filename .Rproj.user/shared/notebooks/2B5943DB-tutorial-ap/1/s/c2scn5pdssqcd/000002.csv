@@ -1,0 +1,7 @@
+"0","library(devtools)    # allow installs from github"
+"0","library(tidyverse)   # for dplyr and broom functionality"
+"0","library(rio)         # handy file i/o tool"
+"0","library(text2vec)    # fastest nlp package in R"
+"0","library(tokenizers)  # pre-canned tokenizers TODO: make sure needed"
+"0","#install_github(""trinker/qdapRegex"") # library for removing URLs"
+"0","library(qdapRegex)"

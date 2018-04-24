@@ -1,0 +1,15 @@
+text = c("ababa foo foo2","ababa foo1 foo2")
+
+library(text2vec)
+tokens <- space_tokenizer(text)
+it_train = itoken(tokens,progressbar = T)
+vocab = create_vocabulary(it_train)
+vectorizer = vocab_vectorizer(vocab)
+# create dtm_train
+dtm_train  = create_dtm(it_train, vectorizer)
+vectorizer = vocab_vectorizer(vocab, skip_grams_window = 2L)
+
+tcm <- create_tcm(it_train, vectorizer, skip_grams_window = 2L)
+glove = GlobalVectors$new(word_vectors_size = 2, vocabulary = vocab, x_max = 3)
+glove$fit(tcm, n_iter = 2)
+word_vectors <- glove$get_word_vectors()

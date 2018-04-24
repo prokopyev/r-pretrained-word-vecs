@@ -1,0 +1,3 @@
+"0","common_terms <- intersect(colnames(dtm), rownames(vecs))"
+"0","dtm_norm <- normalize(dtm[, common_terms], ""l1"")"
+"0","sentence_vectors <- dtm_norm %*% as.matrix(vecs[common_terms, ])"

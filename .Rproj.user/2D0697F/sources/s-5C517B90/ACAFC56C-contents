@@ -1,0 +1,256 @@
+---
+title: "Using Pre-Trained Word Embeddings for Text Classification in R"
+author: "Anton Prokopyev"
+date: "April 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Setting Up in R
+
+First install and load necessary R packages and the dataset for out analysis. We’ll use a dataset of US politicians’ social media posts, labelled by Figure Eight (formerly CrowdFlower) (https://www.figure-eight.com/data-for-everyone/). We will focus on predicting the presence of partisan political bias in senators and representatives’ tweets and Facebook posts.
+
+```{r Step 1: Setting Up in R}
+library(devtools)    # allow installs from github
+library(tidyverse)   # for dplyr functionality
+library(broom)       # for tidy() functionality
+library(rio)         # handy file i/o tool
+library(text2vec)    # fastest nlp package in R
+library(tokenizers)  # pre-canned tokenizers TODO: make sure needed
+#install_github("trinker/qdapRegex") # library for removing URLs
+library(qdapRegex)
+```
+
+## Step 2: Data Preparation
+
+```{r Loading GloVe}
+library(text2vec)
+
+# import GloVe word vectors 
+vecs <- rio::import("/Users/MacBookAir/Desktop/GoogleDrive/DATA/git/wbg-projects/decdd_ntm_docs_classifier/ntm-classification-3/assets/embeddings/glove.6B/glove.6B.200d.txt", header = F)
+rownames(vecs) <- vecs$V1
+vecs$V1 <- NULL
+colnames(vecs) <- paste0("V",c(1:200))
+```
+
+```{r GloVe Sanity check}
+# https://juliasilge.com/blog/tidy-word-vectors/
+
+find_synonyms <- function(vecs, input_word) {
+  
+  sim2(as.matrix(vecs), 
+       as.matrix(vecs[input_word,]),
+       method = "cosine") %>% 
+  tidy() %>%
+  as_tibble() %>%
+  rename(token = .rownames) %>%
+  rename_at(2, ~"similarity") %>% 
+  arrange(-similarity)
+}
+find_synonyms(vecs, "partisanship")
+```
+
+```{r Parsing comments}
+df_orig <- import("assets/Political-media-DFE.csv")
+df_orig$text_clean <- df_orig$text %>%        
+  rm_url(pattern=pastex("@rm_twitter_url", "@rm_url")) %>% # removing URLs
+  str_replace_all("[^[:alpha:]]", " ") %>% # removing all symbols
+  rm_non_words() %>% # removing non-words
+  str_replace_all("\\s+", " ") %>% # fixing poorly spaced strings
+  str_to_lower() # bringing everything to lower case
+```
+
+```{r Sample Tweet}
+df_orig[5, 21:22]
+```
+
+
+```{r Creating dtm}
+it  <- df_orig$text_clean %>%
+        itoken(tokenizer = tokenize_word_stems) # tokenizing tweets
+voc <- create_vocabulary(it) # mark each token with unique id
+vectorizer <- vocab_vectorizer(voc) # text2vec's vectorization func
+dtm <- create_dtm(it, vectorizer) # creating a doc-term matrix
+```
+
+```{r Document Vectors}
+common_terms <- intersect(colnames(dtm), rownames(vecs))
+dtm_norm <- normalize(dtm[, common_terms], "l1")
+sentence_vectors <- dtm_norm %*% as.matrix(vecs[common_terms, ])
+```
+
+
+
+
+
+```{r Split Data into Train and Test}
+sample <- sample.int(n = nrow(sentence_vectors), 
+                    size = floor(0.7*nrow(sentence_vectors)), 
+                    replace = F)
+
+train <- sentence_vectors[ sample, ]
+test  <- sentence_vectors[-sample, ] 
+
+y <- factor(df_orig$bias[sample])
+y <- ifelse(as.numeric(y) == 1, 0, 1)
+
+X <- rbind(train,test)
+train_idx <- 1:nrow(train)
+X_test <- X[-train_idx, ] # test subset including all features
+X <- X[train_idx, ] #train subset including all features
+```
+
+```{r}
+library(xgboost)
+
+weight <- as.numeric(y * 700000 / length(y))
+
+xgb_params <- list(objective = "binary:logistic",
+                    booster = "gbtree",
+                    eval_metric = "auc",
+                    nthread = 4,
+                    eta = 0.01,
+                    max_depth = 6,
+                    min_child_weight = 1e-3,
+                    subsample = 0.7,
+                    colsample_bytree = 1,
+                    lambda = 0,
+                    alpha = 0,
+                    early_stopping_rounds = 50,
+                    weight = weight)
+
+m_xgb <- xgboost(as.matrix(X), y, 
+                 params = xgb_params, 
+                 print_every_n = 100, 
+                 nrounds = 500)
+  #placeholder for feature importance
+```
+
+```{r}
+testpred <- predict(m_xgb, as.matrix(X_test))
+hist(testpred)
+testpred_bin <- ifelse(testpred > 0.5, 1, 0)
+
+y_test <- factor(df_orig$bias[-sample])
+y_test <- ifelse(as.numeric(y_test) == 2, 1, 0)
+
+library(caret)
+confusionMatrix(testpred_bin, y_test)
+
+```
+
+```{r xgboost with caret}
+#Training with xgboost - gives better scores than 'rf'
+trctrl <- trainControl(method = "cv", number = 4, 
+                       returnData = FALSE,
+                       verboseIter = TRUE)
+
+# Takes a long to time to run in kaggle
+set.seed(91234)
+tune_grid <- expand.grid(nrounds=c(300,500,1000),
+                        max_depth = c(3:10),
+                        eta = c(0.01, 0.05),
+                        gamma = c(0, 0.01, 1),
+                        colsample_bytree = c(1),
+                        subsample = c(0.50),
+                        min_child_weight = c(0))
+
+# Tested the above setting in local machine
+# tune_grid <- expand.grid(nrounds = 200,
+#                         max_depth = 5,
+#                         eta = 0.05,
+#                         gamma = 0.01,
+#                         colsample_bytree = 0.75,
+#                         min_child_weight = 0,
+#                         subsample = 0.5)
+
+y <- as.factor(y)
+train_caret <- cbind(as.factor(y), as.data.frame(as.matrix(X)))
+
+xgb_fit <- train(x = X, 
+                y = y, 
+                method = "xgbTree",
+                trControl=trctrl,
+                tuneGrid = tune_grid,
+                tuneLength = 2, 
+                verbose = TRUE)
+
+xgb_fit
+
+feature_imp <- varImp(xgb_fit, scale = FALSE)
+plot(feature_imp, top = 20)
+
+bst <- xgboost:::xgb.Booster.check(xgb_fit$finalModel, saveraw = FALSE)
+xgb.save(bst, fname = "model.xgb")
+
+# Testing
+test_predict <- predict(rf_fit, test)
+confusionMatrix(test_predict, y_test)
+```
+
+
+
+
+
+
+```{r DEPRECATED}
+#df_orig$text %>% rm_url(pattern=pastex("@rm_twitter_url", "@rm_url"))
+#rm_url(x, pattern=pastex("@rm_twitter_url", "@rm_url"), extract=TRUE)
+
+
+#library(Matrix)
+#vecs_matrix <- as.matrix(vecs)
+#document_vecs = dtm %*% vecs
+
+# as(xxxx, "dgTMatrix")
+# spMatrix(xxxx)
+# sparseMatrix(xxxx, giveCsparse=FALSE)
+# xxxx <- head(vecs[,2:201])
+
+#sentence_vectors = dtm_averaged %*% vecs_t[, common_terms]
+#sentence_vectors = dtm_averaged %*% vecs
+#vecs_t <- t(vecs)
+#sentence_vectors = dtm_averaged %*% t(vecs_t[, common_terms])
+
+#xxxx = t(vecs_t[, common_terms])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

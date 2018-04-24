@@ -1,0 +1,23 @@
+df_h2o <- import("/Users/MacBookAir/Desktop/GoogleDrive/DATA/git/wbg-projects/decdd_ntm_docs_classifier/ntm-classification-3/assets/df_ready4ml_h2o.csv")
+
+
+library(text2vec)
+
+vecs <- rio::import("/Users/MacBookAir/Desktop/GoogleDrive/DATA/git/wbg-projects/decdd_ntm_docs_classifier/ntm-classification-3/assets/embeddings/glove.6B/glove.6B.200d.txt", header = F)
+rownames(vecs) <- vecs$V1
+vecs$V1 <- NULL
+mycolnames <- c(1:200)
+mycolnames <- paste0("V",mycolnames)
+colnames(vecs) <- mycolnames
+
+it <- df_h2o$section_clean %>%
+  itoken(tokenizer = tokenize_word_stems)
+voc <- create_vocabulary(rownames(vecs))
+vectorizer <- vocab_vectorizer(voc)
+dtm <- create_dtm(it, vectorizer)
+
+common_terms = intersect(colnames(dtm), rownames(vecs))
+dtm_averaged =  normalize(dtm[, common_terms], "l1")
+vecs <- as.matrix(vecs)
+sentence_vectors = dtm_averaged %*% vecs[common_terms, ]
+sentence_vectors_unnorm = dtm %*% vecs[common_terms, ]
